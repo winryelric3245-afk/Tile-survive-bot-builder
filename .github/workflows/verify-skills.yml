@@ -5,6 +5,7 @@ on:
       - "patch_skill_tracker.py"
       - "patch_skill_tracker_v2.py"
       - "patch_timer_visibility_v3.py"
+      - "patch_compact_auto_priority_v4.py"
       - "install_skill_tracker.sh"
       - ".github/workflows/verify-skills.yml"
   workflow_dispatch:
@@ -18,7 +19,7 @@ jobs:
           python-version: "3.11"
       - name: Verify Python and shell scripts
         run: |
-          python -m py_compile patch_skill_tracker.py patch_skill_tracker_v2.py patch_timer_visibility_v3.py
+          python -m py_compile patch_skill_tracker.py patch_skill_tracker_v2.py patch_timer_visibility_v3.py patch_compact_auto_priority_v4.py
           bash -n install_skill_tracker.sh
       - name: Extract original bot archive
         run: |
@@ -28,6 +29,7 @@ jobs:
           python patch_skill_tracker.py /tmp/bob.py
           python patch_skill_tracker_v2.py /tmp/bob.py
           python patch_timer_visibility_v3.py /tmp/bob.py
+          python patch_compact_auto_priority_v4.py /tmp/bob.py
           python -m py_compile /tmp/bob.py
           grep -q 'BOB_SKILL_TRACKER_V2' /tmp/bob.py
           grep -q 'skills_used' /tmp/bob.py
@@ -36,12 +38,14 @@ jobs:
         run: |
           python patch_skill_tracker_v2.py /tmp/bob.py
           python patch_timer_visibility_v3.py /tmp/bob.py
+          python patch_compact_auto_priority_v4.py /tmp/bob.py
           python -m py_compile /tmp/bob.py
       - name: Upgrade direct from original
         run: |
           unzip -p Tile_Survivor_Helper_Bot_v4_Priority_Manage.zip Tile_Survivor_Helper_Bot/bot.py > /tmp/bob-direct.py
           python patch_skill_tracker_v2.py /tmp/bob-direct.py
           python patch_timer_visibility_v3.py /tmp/bob-direct.py
+          python patch_compact_auto_priority_v4.py /tmp/bob-direct.py
           python -m py_compile /tmp/bob-direct.py
       - name: Runtime smoke test of timer skill data and Discord controls
         run: |
@@ -83,5 +87,18 @@ jobs:
           assert len(bob.TimerActionsView(row).children)==5
           assert "ends <t:" not in str(bob.make_board_embed(1).to_dict())
           assert "Builder" in bob.timer_page(1)[0]
+          assert len(bob.make_board_embed(1).fields)>0
+          with bob.connect() as db:
+              ts=int(time.time())
+              db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
+                  VALUES(1,'AutoUrgent','build','Power Plant',?,9,?,2)""",(ts+40*86400,ts))
+              a=db.execute("SELECT * FROM timers WHERE player='AutoUrgent'").fetchone()
+              assert a["priority"]==4
+              db.execute("UPDATE timers SET priority=2,priority_override=1 WHERE id=?",(a["id"],))
+              db.execute("UPDATE timers SET end_ts=? WHERE id=?",(ts+45*86400,a["id"]))
+              b=db.execute("SELECT * FROM timers WHERE id=?",(a["id"],)).fetchone()
+              assert b["priority"]==2
+          assert len(bob.HelperButtons().children)==5
+          assert len(bob.TimerActionsView(row).children)==5
           print("PASS: saved categories, durations, pagination, skills, deletion and buttons")
           PY
