@@ -163,7 +163,7 @@ async def skills(interaction:discord.Interaction):
             WHERE guild_id=? AND completed=0 AND end_ts>strftime('%s','now')
             ORDER BY timer_type,priority DESC,end_ts DESC LIMIT 50""",
             (interaction.guild_id,)).fetchall()
-    report="\n".join(f"#{r['id']} {r['player']} · {timer_skill_label(r)}" for r in rows)
+    report="\\n".join(f"#{r['id']} {r['player']} · {timer_skill_label(r)}" for r in rows)
     await interaction.response.send_message(report[:1900] if report else "No active timers.",ephemeral=True)
 
 '''
