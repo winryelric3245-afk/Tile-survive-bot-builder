@@ -40,6 +40,8 @@ curl -fsSL "$REPO/patch_skill_tracker_v2.py" -o "$PATCH"
 python3 "$PATCH" "$BOT"
 curl -fsSL "$REPO/patch_timer_visibility_v3.py" -o /tmp/patch_timer_visibility_v3.py
 python3 /tmp/patch_timer_visibility_v3.py "$BOT"
+curl -fsSL "$REPO/patch_compact_auto_priority_v4.py" -o /tmp/patch_compact_auto_priority_v4.py
+python3 /tmp/patch_compact_auto_priority_v4.py "$BOT"
 python3 -m py_compile "$BOT"
 SERVICES=()
 while read -r service; do
