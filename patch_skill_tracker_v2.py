@@ -23,14 +23,7 @@ SCHEMA='''
           AFTER DELETE ON timers BEGIN
             DELETE FROM timer_skill_history WHERE timer_id=OLD.id;
           END""")
-        # Correct unambiguous research projects entered under Add Build.
-        db.execute("""UPDATE timers SET timer_type='research'
-                      WHERE timer_type='build' AND lower(project) LIKE '%research%'""")
-        db.execute("""UPDATE timers SET timer_type='build'
-                      WHERE timer_type='research' AND (
-                      lower(project) LIKE '%power plant%' OR
-                      lower(project) LIKE '%construction%' OR
-                      lower(project) LIKE '%building%')""")
+        # Never change timer_type from project text. Respect the category selected by members.
         # Carry over V1 counts only when the old player/type maps to a
         # single active timer; never spread one count across multiple timers.
         tables={r["name"] for r in db.execute(
