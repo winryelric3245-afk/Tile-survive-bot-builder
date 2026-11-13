@@ -6,6 +6,7 @@ on:
       - "patch_skill_tracker_v2.py"
       - "patch_timer_visibility_v3.py"
       - "patch_compact_auto_priority_v4.py"
+      - "patch_auto_skill_reduction_v5.py"
       - "install_skill_tracker.sh"
       - ".github/workflows/verify-skills.yml"
   workflow_dispatch:
@@ -19,7 +20,7 @@ jobs:
           python-version: "3.11"
       - name: Verify Python and shell scripts
         run: |
-          python -m py_compile patch_skill_tracker.py patch_skill_tracker_v2.py patch_timer_visibility_v3.py patch_compact_auto_priority_v4.py
+          python -m py_compile patch_skill_tracker.py patch_skill_tracker_v2.py patch_timer_visibility_v3.py patch_compact_auto_priority_v4.py patch_auto_skill_reduction_v5.py
           bash -n install_skill_tracker.sh
       - name: Extract original bot archive
         run: |
@@ -30,6 +31,7 @@ jobs:
           python patch_skill_tracker_v2.py /tmp/bob.py
           python patch_timer_visibility_v3.py /tmp/bob.py
           python patch_compact_auto_priority_v4.py /tmp/bob.py
+          python patch_auto_skill_reduction_v5.py /tmp/bob.py
           python -m py_compile /tmp/bob.py
           grep -q 'BOB_SKILL_TRACKER_V2' /tmp/bob.py
           grep -q 'skills_used' /tmp/bob.py
@@ -39,6 +41,7 @@ jobs:
           python patch_skill_tracker_v2.py /tmp/bob.py
           python patch_timer_visibility_v3.py /tmp/bob.py
           python patch_compact_auto_priority_v4.py /tmp/bob.py
+          python patch_auto_skill_reduction_v5.py /tmp/bob.py
           python -m py_compile /tmp/bob.py
       - name: Upgrade direct from original
         run: |
@@ -46,6 +49,7 @@ jobs:
           python patch_skill_tracker_v2.py /tmp/bob-direct.py
           python patch_timer_visibility_v3.py /tmp/bob-direct.py
           python patch_compact_auto_priority_v4.py /tmp/bob-direct.py
+          python patch_auto_skill_reduction_v5.py /tmp/bob-direct.py
           python -m py_compile /tmp/bob-direct.py
       - name: Runtime smoke test of timer skill data and Discord controls
         run: |
@@ -73,9 +77,22 @@ jobs:
               assert wrong['skills_used']==build['skills_used']==0
               research_id=wrong['id']
               build_id=build['id']
+          with bob.connect() as db:
+              old_seconds=db.execute("SELECT end_ts FROM timers WHERE id=?",(research_id,)).fetchone()[0]-int(time.time())
           assert bob.adjust_timer_skill(1,research_id,1,99)[2]==1
+          with bob.connect() as db:
+              new_seconds=db.execute("SELECT end_ts FROM timers WHERE id=?",(research_id,)).fetchone()[0]-int(time.time())
+              recorded=db.execute("SELECT duration_seconds FROM timers WHERE id=?",(research_id,)).fetchone()[0]
+          assert abs(new_seconds-old_seconds*0.85)<3, (new_seconds,old_seconds)
+          assert abs(recorded-new_seconds)<3
           assert bob.adjust_timer_skill(1,research_id,1,99)[2]==2
+          with bob.connect() as db:
+              twice=db.execute("SELECT end_ts FROM timers WHERE id=?",(research_id,)).fetchone()[0]-int(time.time())
+          assert abs(twice-new_seconds*0.85)<3, (twice,new_seconds)
           assert bob.adjust_timer_skill(1,research_id,-1,99)[2]==1
+          with bob.connect() as db:
+              restored=db.execute("SELECT end_ts FROM timers WHERE id=?",(research_id,)).fetchone()[0]-int(time.time())
+          assert abs(restored-new_seconds)<4, (restored,new_seconds)
           with bob.connect() as db:
               other=db.execute("SELECT skills_used FROM timers WHERE id=?",(build_id,)).fetchone()
               assert other['skills_used']==0
@@ -100,5 +117,5 @@ jobs:
               assert b["priority"]==2
           assert len(bob.HelperButtons().children)==5
           assert len(bob.TimerActionsView(row).children)==5
-          print("PASS: saved categories, durations, pagination, skills, deletion and buttons")
+          print("PASS: buttons, auto-priority, compact board, 15% reductions, reversal, duration triggers, deletion")
           PY
