@@ -1,0 +1,26 @@
+name: Verify Bob Skill Tracker
+on:
+  push:
+    paths:
+      - "patch_skill_tracker.py"
+      - ".github/workflows/verify-skills.yml"
+  workflow_dispatch:
+jobs:
+  test-patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Extract archived original bot
+        run: |
+          unzip -p Tile_Survivor_Helper_Bot_v4_Priority_Manage.zip Tile_Survivor_Helper_Bot/bot.py > /tmp/bob.py
+      - name: Apply skill tracker patch
+        run: python patch_skill_tracker.py /tmp/bob.py
+      - name: Check syntax and idempotency
+        run: |
+          python -m py_compile /tmp/bob.py
+          python patch_skill_tracker.py /tmp/bob.py
+          grep -q 'BOB_SKILL_TRACKER_V1' /tmp/bob.py
+          grep -q 'name="skillremove"' /tmp/bob.py
