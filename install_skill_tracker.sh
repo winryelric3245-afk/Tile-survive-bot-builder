@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 REPO="https://raw.githubusercontent.com/winryelric3245-afk/Tile-survive-bot-builder/main"
-PATCH="/tmp/bob_patch_skill_tracker.py"
+PATCH="/tmp/patch_skill_tracker_v2.py"
 echo "Locating the existing Bob the Builder installation..."
 mapfile -d '' CANDIDATES < <(
-  find /opt /root /home /srv -type f -name bot.py \
+  find /opt /root /home /srv /app /workspace -type f -name bot.py \
     ! -path '*/.venv/*' ! -path '*/venv/*' \
     ! -path '*/site-packages/*' 2>/dev/null -print0 || true
 )
@@ -35,7 +35,8 @@ if [ -f "$DBFILE" ]; then
   cp -p "$DBFILE" "$DBFILE.backup-skills-$(date +%Y%m%d-%H%M%S)"
   echo "Backed up existing player/timer database."
 fi
-curl -fsSL "$REPO/patch_skill_tracker.py" -o "$PATCH"
+curl -fsSL "$REPO/patch_skill_tracker.py" -o /tmp/patch_skill_tracker.py
+curl -fsSL "$REPO/patch_skill_tracker_v2.py" -o "$PATCH"
 python3 "$PATCH" "$BOT"
 python3 -m py_compile "$BOT"
 SERVICES=()
@@ -54,4 +55,4 @@ else
   printf 'More than one matching service: %s\n' "${SERVICES[*]}"
   echo "No restart performed; choose the correct Bob service."
 fi
-echo "Check /skills, /skilladd and /skillremove in Discord."
+echo "Use + Skill on the Bob board, or /skilladd and /skillremove in Discord."
