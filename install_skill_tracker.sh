@@ -9,19 +9,19 @@ mapfile -d '' CANDIDATES < <(
     ! -path '*/site-packages/*' 2>/dev/null -print0 || true
 )
 MATCHES=()
-for path in "\${CANDIDATES[@]}"; do
+for path in "${CANDIDATES[@]}"; do
   if grep -q 'class HelperButtons(discord.ui.View):' "$path" \
      && grep -q 'def init_db():' "$path"; then
     MATCHES+=("$path")
   fi
 done
-if [ "\${#MATCHES[@]}" -ne 1 ]; then
-  echo "Expected exactly one Bob bot.py; found \${#MATCHES[@]}."
-  printf 'Candidate: %s\n' "\${MATCHES[@]}"
+if [ "${#MATCHES[@]}" -ne 1 ]; then
+  echo "Expected exactly one Bob bot.py; found ${#MATCHES[@]}."
+  printf 'Candidate: %s\n' "${MATCHES[@]}"
   echo "No changes were made."
   exit 1
 fi
-BOT="\${MATCHES[0]}"
+BOT="${MATCHES[0]}"
 BOT_DIR="$(dirname "$BOT")"
 echo "Found Bob bot: $BOT"
 DBFILE="$BOT_DIR/helper_bot.db"
@@ -44,14 +44,14 @@ while read -r service; do
   execstart="$(systemctl show "$service" -p ExecStart --value 2>/dev/null || true)"
   if [[ "$execstart" == *"$BOT"* ]]; then SERVICES+=("$service"); fi
 done < <(systemctl list-units --all --type=service --no-legend --plain 2>/dev/null | awk '{print $1}')
-if [ "\${#SERVICES[@]}" -eq 1 ]; then
-  echo "Restarting \${SERVICES[0]}..."
-  systemctl restart "\${SERVICES[0]}"
-  systemctl --no-pager --full status "\${SERVICES[0]}" | head -20
-elif [ "\${#SERVICES[@]}" -eq 0 ]; then
+if [ "${#SERVICES[@]}" -eq 1 ]; then
+  echo "Restarting ${SERVICES[0]}..."
+  systemctl restart "${SERVICES[0]}"
+  systemctl --no-pager --full status "${SERVICES[0]}" | head -20
+elif [ "${#SERVICES[@]}" -eq 0 ]; then
   echo "Code updated, but no matching systemd service found. Restart Bob using its current process manager."
 else
-  printf 'More than one matching service: %s\n' "\${SERVICES[*]}"
+  printf 'More than one matching service: %s\n' "${SERVICES[*]}"
   echo "No restart performed; choose the correct Bob service."
 fi
 echo "Check /skills, /skilladd and /skillremove in Discord."
