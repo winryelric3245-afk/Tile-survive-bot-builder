@@ -39,3 +39,43 @@ jobs:
           unzip -p Tile_Survivor_Helper_Bot_v4_Priority_Manage.zip Tile_Survivor_Helper_Bot/bot.py > /tmp/bob-direct.py
           python patch_skill_tracker_v2.py /tmp/bob-direct.py
           python -m py_compile /tmp/bob-direct.py
+      - name: Runtime smoke test of timer skill data and Discord controls
+        run: |
+          python -m pip install -q "discord.py>=2.4,<3" python-dotenv
+          DB_PATH=/tmp/bob-smoke.db python - <<'PY'
+          import importlib.util
+          import os
+          import time
+          spec=importlib.util.spec_from_file_location("bob_smoke","/tmp/bob.py")
+          bob=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bob)
+          bob.init_db()
+          expiry=int(time.time())+86400*30
+          with bob.connect() as db:
+              db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
+                  VALUES(1,'WrongResearch','build','Research Speed',?,9,?,2)""",(expiry,int(time.time())))
+              db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
+                  VALUES(1,'Builder','build','Power Plant',?,9,?,2)""",(expiry,int(time.time())))
+          bob.init_db()
+          with bob.connect() as db:
+              wrong=db.execute("SELECT * FROM timers WHERE player='WrongResearch'").fetchone()
+              build=db.execute("SELECT * FROM timers WHERE player='Builder'").fetchone()
+              assert wrong['timer_type']=='research'
+              assert build['timer_type']=='build'
+              assert wrong['skills_used']==build['skills_used']==0
+              research_id=wrong['id']
+              build_id=build['id']
+          assert bob.adjust_timer_skill(1,research_id,1,99)[2]==1
+          assert bob.adjust_timer_skill(1,research_id,1,99)[2]==2
+          assert bob.adjust_timer_skill(1,research_id,-1,99)[2]==1
+          with bob.connect() as db:
+              other=db.execute("SELECT skills_used FROM timers WHERE id=?",(build_id,)).fetchone()
+              assert other['skills_used']==0
+              db.execute("DELETE FROM timers WHERE id=?",(research_id,))
+              assert db.execute("SELECT COUNT(*) FROM timer_skill_history WHERE timer_id=?",(research_id,)).fetchone()[0]==0
+          assert len(bob.HelperButtons().children)==5
+          with bob.connect() as db:
+              row=db.execute("SELECT * FROM timers WHERE id=?",(build_id,)).fetchone()
+          assert len(bob.TimerActionsView(row).children)==5
+          print("PASS: category correction, per-timer counter, decrement, deletion and Discord buttons")
+          PY
