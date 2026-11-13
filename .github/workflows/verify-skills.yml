@@ -4,6 +4,7 @@ on:
     paths:
       - "patch_skill_tracker.py"
       - "patch_skill_tracker_v2.py"
+      - "patch_timer_visibility_v3.py"
       - "install_skill_tracker.sh"
       - ".github/workflows/verify-skills.yml"
   workflow_dispatch:
@@ -17,7 +18,7 @@ jobs:
           python-version: "3.11"
       - name: Verify Python and shell scripts
         run: |
-          python -m py_compile patch_skill_tracker.py patch_skill_tracker_v2.py
+          python -m py_compile patch_skill_tracker.py patch_skill_tracker_v2.py patch_timer_visibility_v3.py
           bash -n install_skill_tracker.sh
       - name: Extract original bot archive
         run: |
@@ -26,6 +27,7 @@ jobs:
         run: |
           python patch_skill_tracker.py /tmp/bob.py
           python patch_skill_tracker_v2.py /tmp/bob.py
+          python patch_timer_visibility_v3.py /tmp/bob.py
           python -m py_compile /tmp/bob.py
           grep -q 'BOB_SKILL_TRACKER_V2' /tmp/bob.py
           grep -q 'skills_used' /tmp/bob.py
@@ -33,11 +35,13 @@ jobs:
       - name: Ensure safe repeat install
         run: |
           python patch_skill_tracker_v2.py /tmp/bob.py
+          python patch_timer_visibility_v3.py /tmp/bob.py
           python -m py_compile /tmp/bob.py
       - name: Upgrade direct from original
         run: |
           unzip -p Tile_Survivor_Helper_Bot_v4_Priority_Manage.zip Tile_Survivor_Helper_Bot/bot.py > /tmp/bob-direct.py
           python patch_skill_tracker_v2.py /tmp/bob-direct.py
+          python patch_timer_visibility_v3.py /tmp/bob-direct.py
           python -m py_compile /tmp/bob-direct.py
       - name: Runtime smoke test of timer skill data and Discord controls
         run: |
@@ -60,7 +64,7 @@ jobs:
           with bob.connect() as db:
               wrong=db.execute("SELECT * FROM timers WHERE player='WrongResearch'").fetchone()
               build=db.execute("SELECT * FROM timers WHERE player='Builder'").fetchone()
-              assert wrong['timer_type']=='research'
+              assert wrong['timer_type']=='build'
               assert build['timer_type']=='build'
               assert wrong['skills_used']==build['skills_used']==0
               research_id=wrong['id']
@@ -77,5 +81,7 @@ jobs:
           with bob.connect() as db:
               row=db.execute("SELECT * FROM timers WHERE id=?",(build_id,)).fetchone()
           assert len(bob.TimerActionsView(row).children)==5
-          print("PASS: category correction, per-timer counter, decrement, deletion and Discord buttons")
+          assert "ends <t:" not in str(bob.make_board_embed(1).to_dict())
+          assert "Builder" in bob.timer_page(1)[0]
+          print("PASS: saved categories, durations, pagination, skills, deletion and buttons")
           PY
