@@ -29,6 +29,12 @@ jobs:
               pathlib.Path("/tmp/bob-v8-source-name").write_text(candidates[0])
               pathlib.Path("/tmp/bob-v8.py").write_bytes(z.read(candidates[0]))
           PY
+          python - <<'PY'
+          import ast
+          p=ast.parse(open("/tmp/bob-v8.py").read())
+          print("Top-level functions:", [n.name for n in p.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))])
+          print("View classes and methods:",[(n.name,[m.name for m in n.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef))]) for n in p.body if isinstance(n,ast.ClassDef)])
+          PY
           python patch_member_skill_controls_v8.py /tmp/bob-v8.py
           python -m py_compile /tmp/bob-v8.py
       - name: Verify Discord controls and timer behavior
