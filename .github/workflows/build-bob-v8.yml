@@ -1,0 +1,93 @@
+name: Build and verify Bob v8 member skill controls
+on:
+  push:
+    paths:
+      - "patch_member_skill_controls_v8.py"
+      - ".github/workflows/build-bob-v8.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install bot runtime for smoke test
+        run: python -m pip install "discord.py>=2.4,<3" python-dotenv
+      - name: Extract and patch latest v7 release
+        run: |
+          python - <<'PY'
+          import zipfile,pathlib
+          source=pathlib.Path("Bob_the_Builder_v7_Seven_Day_Emoji_Board.zip")
+          with zipfile.ZipFile(source) as z:
+              print("Archive entries:",z.namelist())
+              candidates=[n for n in z.namelist() if n.endswith("/bot.py") or n=="bot.py"]
+              assert len(candidates)==1, f"Expected one bot.py: {candidates}"
+              pathlib.Path("/tmp/bob-v8-source-name").write_text(candidates[0])
+              pathlib.Path("/tmp/bob-v8.py").write_bytes(z.read(candidates[0]))
+          PY
+          python patch_member_skill_controls_v8.py /tmp/bob-v8.py
+          python -m py_compile /tmp/bob-v8.py
+      - name: Verify Discord controls and timer behavior
+        env:
+          DB_PATH: /tmp/bob-v8-test.db
+        run: |
+          python - <<'PY'
+          import importlib.util, time, inspect
+          spec=importlib.util.spec_from_file_location("bob_v8","/tmp/bob-v8.py")
+          bob=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(bob)
+          bob.init_db()
+          now=int(time.time())
+          with bob.connect() as db:
+              db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
+                  VALUES(1,'Builder','build','Power Plant',?,123,?,2)""",(now+30*86400,now))
+              db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
+                  VALUES(1,'Researcher','research','Lab',?,456,?,2)""",(now+30*86400,now))
+              rows=db.execute("SELECT * FROM timers WHERE guild_id=1 ORDER BY id").fetchall()
+          assert len(rows)==2
+          a,b=rows
+          assert any(getattr(child,'label',None)=='+ Skill' for child in bob.TimerActionsView(a).children)
+          assert any(getattr(child,'label',None)=='- Skill' for child in bob.TimerActionsView(a).children)
+          before=a['end_ts']
+          assert bob.adjust_timer_skill(1,a['id'],1,123)[2]==1
+          with bob.connect() as db:
+              after=db.execute("SELECT end_ts FROM timers WHERE id=?",(a['id'],)).fetchone()[0]
+          assert abs((after-now)/(before-now)-0.85)<0.001
+          assert bob.adjust_timer_skill(1,a['id'],-1,123)[2]==0
+          with bob.connect() as db:
+              fixed=db.execute("SELECT * FROM timers WHERE id=?",(a['id'],)).fetchone()
+              untouched=db.execute("SELECT * FROM timers WHERE id=?",(b['id'],)).fetchone()
+          assert abs(fixed['end_ts']-before)<5
+          assert untouched['skills_used']==0
+          assert fixed['timer_type']=='build' and untouched['timer_type']=='research'
+          source=inspect.getsource(bob.skillremove.callback)
+          assert 'can_manage' not in source
+          print("PASS: member +/- controls, slash permission, 15% reduction and undo, independent build/research timers")
+          PY
+      - name: Package complete updated bot
+        run: |
+          python - <<'PY'
+          import zipfile,pathlib
+          original=pathlib.Path("Bob_the_Builder_v7_Seven_Day_Emoji_Board.zip")
+          output=pathlib.Path("Bob_the_Builder_v8_Member_Skill_Controls.zip")
+          target=pathlib.Path("/tmp/bob-v8-source-name").read_text()
+          with zipfile.ZipFile(original) as zin,zipfile.ZipFile(output,'w') as zout:
+              for item in zin.infolist():
+                  zout.writestr(item,pathlib.Path("/tmp/bob-v8.py").read_bytes() if item.filename==target else zin.read(item.filename))
+          with zipfile.ZipFile(output) as z:
+              assert b"BOB_MEMBER_SKILL_CONTROLS_V8" in z.read(target)
+          print("Created:",output)
+          PY
+      - name: Commit verified v8 archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Bob_the_Builder_v8_Member_Skill_Controls.zip
+          if ! git diff --cached --quiet; then
+            git commit -m "Release Bob v8 with member add/remove skills"
+            git push
+          fi
