@@ -1,0 +1,76 @@
+name: Test and build Bob v9 member skill visibility
+on:
+  push:
+    paths:
+      - "patch_member_skills_v9.py"
+      - ".github/workflows/build-bob-v9.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install "discord.py>=2.4,<3" python-dotenv
+      - name: Apply patch to current v8 and compile
+        run: |
+          unzip -p Bob_the_Builder_v8_Member_Skill_Controls.zip Tile_Survivor_Helper_Bot/bot.py > /tmp/bob9.py
+          python3 patch_member_skills_v9.py /tmp/bob9.py
+          python3 -m py_compile /tmp/bob9.py
+      - name: Test non-admin Build and Research and undo
+        env:
+          DB_PATH: /tmp/bob9-test.db
+        run: |
+          python - <<'PY'
+          import importlib.util,time
+          from types import SimpleNamespace
+          spec=importlib.util.spec_from_file_location("bob9","/tmp/bob9.py")
+          bob=importlib.util.module_from_spec(spec);spec.loader.exec_module(bob)
+          bob.init_db()
+          now=int(time.time())
+          with bob.connect() as db:
+              for player,kind,creator in [('Layla','research',111),('Builder','build',111),('Other','research',222)]:
+                  db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
+                    VALUES(1,?,?,?,?,?,?,2)""",(player,kind,'Test Timer',now+30*86400,creator,now))
+              rows=db.execute("SELECT * FROM timers WHERE guild_id=1").fetchall()
+          def intr(uid):
+              return SimpleNamespace(guild_id=1,guild=SimpleNamespace(owner_id=99999),user=SimpleNamespace(id=uid,roles=[],guild_permissions=SimpleNamespace(manage_guild=False,administrator=False)))
+          user=intr(333)
+          for r in rows:
+              assert bob.member_skill_access(user,r['timer_type'],r['player']), r['player']
+              assert bob.member_skill_access(user,r['timer_type'],r['player'],r['id'])
+          assert not bob.member_skill_access(user,'build','Layla')
+          assert not bob.member_skill_access(user,'research','Missing')
+          assert {c.label for c in bob.HelperButtons().children}>={'+ Skill','− Skill'}
+          target=next(r for r in rows if r['player']=='Layla')
+          event_id,count=bob.apply_skill(1,333,'research','Layla',15,target['id'])
+          assert count==1
+          with bob.connect() as db:
+              ev=db.execute("SELECT * FROM skill_events WHERE id=?",(event_id,)).fetchone()
+              updated=db.execute("SELECT * FROM timers WHERE id=?",(target['id'],)).fetchone()
+          assert updated['skill_count']==1
+          assert updated['end_ts']<target['end_ts']
+          assert bob.member_event_access(user,ev)
+          assert not bob.member_event_access(intr(444),ev)
+          print("PASS: ordinary member can see and add Build/Research skills on existing timers, own undo allowed")
+          PY
+      - name: Build and publish complete v9 archive
+        run: |
+          python - <<'PY'
+          import zipfile,pathlib
+          with zipfile.ZipFile("Bob_the_Builder_v8_Member_Skill_Controls.zip") as old, zipfile.ZipFile("Bob_the_Builder_v9_Member_Skills_Fixed.zip","w") as new:
+              for entry in old.infolist():
+                  new.writestr(entry,pathlib.Path("/tmp/bob9.py").read_bytes() if entry.filename=="Tile_Survivor_Helper_Bot/bot.py" else old.read(entry.filename))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Bob_the_Builder_v9_Member_Skills_Fixed.zip
+          if ! git diff --cached --quiet; then
+            git commit -m "Release tested Bob v9 member skill visibility fix"
+            git push
+          fi
