@@ -86,8 +86,8 @@ jobs:
           assert not bob.member_event_access(outsider,event)
           # Audit the actual button callback functions, not only helper functions.
           import inspect
-          for method in [bob.HelperButtons.add_skill.callback,
-                         bob.HelperButtons.undo_skill.callback,
+          for method in [bob.HelperButtons.add_skill,
+                         bob.HelperButtons.undo_skill,
                          bob.SkillTargetSelect.callback,
                          bob.SkillPercentView.apply,
                          bob.UndoSkillSelect.callback]:
