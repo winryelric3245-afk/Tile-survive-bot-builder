@@ -66,7 +66,7 @@ jobs:
                   VALUES(1,'Researcher','research','Lab',?,456,?,2)""",(now+30*86400,now))
               a,b=db.execute("SELECT * FROM timers WHERE guild_id=1 ORDER BY id").fetchall()
           def interaction(user):
-              return SimpleNamespace(guild_id=1,user=SimpleNamespace(id=user,guild_permissions=SimpleNamespace(manage_guild=False,administrator=False)))
+              return SimpleNamespace(guild_id=1,guild=SimpleNamespace(owner_id=999999),user=SimpleNamespace(id=user,roles=[],guild_permissions=SimpleNamespace(manage_guild=False,administrator=False)))
           owner=interaction(123)
           outsider=interaction(789)
           assert bob.member_skill_access(owner,'build','Builder',a['id'])
