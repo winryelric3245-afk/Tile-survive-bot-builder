@@ -3,20 +3,13 @@
 set -euo pipefail
 BASE="https://raw.githubusercontent.com/winryelric3245-afk/Tile-survive-bot-builder/main"
 PATCH="/tmp/patch_member_skill_controls_v8.py"
-echo "Locating Bob's live bot.py..."
-mapfile -d '' CANDIDATES < <(find /opt /root /home /srv /app /workspace \( -type d \( -name backups -o -name backup -o -name .venv -o -name venv -o -name site-packages \) -prune \) -o \( -type f -name bot.py -print0 \) 2>/dev/null || true)
-MATCHES=()
-for f in "${CANDIDATES[@]}"; do
-  if grep -q 'class HelperButtons(discord.ui.View):' "$f" && grep -q 'def apply_skill(' "$f" && grep -q 'class UndoSkillSelect(' "$f"; then
-    MATCHES+=("$f")
-  fi
-done
-if [[ ${#MATCHES[@]} -ne 1 ]]; then
-  echo "Expected exactly one compatible Bob installation; found ${#MATCHES[@]}. Nothing changed."
-  printf 'Candidate: %s\n' "${MATCHES[@]}"
+echo "Bob v8 installer revision 3 — using verified live path."
+BOT="/opt/bob/x/Tile_Survivor_Helper_Bot/bot.py"
+if [[ ! -f "$BOT" ]] || ! grep -q 'class HelperButtons(discord.ui.View):' "$BOT" || ! grep -q 'def apply_skill(' "$BOT"; then
+  echo "Live Bob bot.py not found at expected location; no changes made."
   exit 1
 fi
-BOT="${MATCHES[0]}"
+echo "Bot: $BOT"
 DIR="$(dirname "$BOT")"
 echo "Bot: $BOT"
 TS="$(date +%Y%m%d-%H%M%S)"
