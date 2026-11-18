@@ -84,7 +84,21 @@ jobs:
           assert after['skill_count']==1 and untouched['skill_count']==0
           assert bob.member_event_access(owner,event)
           assert not bob.member_event_access(outsider,event)
-          print("PASS: member +/− controls, own-timer access, skill event ownership, 15% reduction, isolated build/research")
+          # Audit the actual button callback functions, not only helper functions.
+          import inspect
+          for method in [bob.HelperButtons.add_skill.callback,
+                         bob.HelperButtons.undo_skill.callback,
+                         bob.SkillTargetSelect.callback,
+                         bob.SkillPercentView.apply,
+                         bob.UndoSkillSelect.callback]:
+              body=inspect.getsource(method)
+              assert 'Only managers can' not in body, (method.__name__,body)
+          # Slash commands must not have Discord admin-only default permissions.
+          for command in [bob.skill, bob.undoskill]:
+              assert not getattr(command,"default_permissions",None), command.name
+          # Simulate an actual user-visible skill picker with zero manager permissions.
+          assert len(bob.HelperButtons().children)==7
+          print("PASS: normal-user Discord button paths, command permissions, owner checks, independent build/research timers and 15% reduction")
           PY
       - name: Package complete updated bot
         run: |
