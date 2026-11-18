@@ -47,12 +47,13 @@ jobs:
           PY
           python patch_member_skill_controls_v8.py /tmp/bob-v8.py
           python -m py_compile /tmp/bob-v8.py
-      - name: Verify Discord controls and timer behavior
+      - name: Verify Discord controls and per-timer permissions
         env:
           DB_PATH: /tmp/bob-v8-test.db
         run: |
           python - <<'PY'
-          import importlib.util, time, inspect
+          import importlib.util, time
+          from types import SimpleNamespace
           spec=importlib.util.spec_from_file_location("bob_v8","/tmp/bob-v8.py")
           bob=importlib.util.module_from_spec(spec)
           spec.loader.exec_module(bob)
@@ -63,26 +64,27 @@ jobs:
                   VALUES(1,'Builder','build','Power Plant',?,123,?,2)""",(now+30*86400,now))
               db.execute("""INSERT INTO timers(guild_id,player,timer_type,project,end_ts,created_by,created_ts,priority)
                   VALUES(1,'Researcher','research','Lab',?,456,?,2)""",(now+30*86400,now))
-              rows=db.execute("SELECT * FROM timers WHERE guild_id=1 ORDER BY id").fetchall()
-          assert len(rows)==2
-          a,b=rows
-          assert any(getattr(child,'label',None)=='+ Skill' for child in bob.TimerActionsView(a).children)
-          assert any(getattr(child,'label',None)=='- Skill' for child in bob.TimerActionsView(a).children)
+              a,b=db.execute("SELECT * FROM timers WHERE guild_id=1 ORDER BY id").fetchall()
+          def interaction(user):
+              return SimpleNamespace(guild_id=1,user=SimpleNamespace(id=user,guild_permissions=SimpleNamespace(manage_guild=False,administrator=False)))
+          owner=interaction(123)
+          outsider=interaction(789)
+          assert bob.member_skill_access(owner,'build','Builder',a['id'])
+          assert not bob.member_skill_access(outsider,'build','Builder',a['id'])
+          assert not bob.member_skill_access(owner,'research','Researcher',b['id'])
+          assert {c.label for c in bob.HelperButtons().children}>={'+ Skill','− Skill'}
           before=a['end_ts']
-          assert bob.adjust_timer_skill(1,a['id'],1,123)[2]==1
+          ev,count=bob.apply_skill(1,123,'build','Builder',15,a['id'])
+          assert count==1
           with bob.connect() as db:
-              after=db.execute("SELECT end_ts FROM timers WHERE id=?",(a['id'],)).fetchone()[0]
-          assert abs((after-now)/(before-now)-0.85)<0.001
-          assert bob.adjust_timer_skill(1,a['id'],-1,123)[2]==0
-          with bob.connect() as db:
-              fixed=db.execute("SELECT * FROM timers WHERE id=?",(a['id'],)).fetchone()
+              after=db.execute("SELECT * FROM timers WHERE id=?",(a['id'],)).fetchone()
               untouched=db.execute("SELECT * FROM timers WHERE id=?",(b['id'],)).fetchone()
-          assert abs(fixed['end_ts']-before)<5
-          assert untouched['skills_used']==0
-          assert fixed['timer_type']=='build' and untouched['timer_type']=='research'
-          source=inspect.getsource(bob.skillremove.callback)
-          assert 'can_manage' not in source
-          print("PASS: member +/- controls, slash permission, 15% reduction and undo, independent build/research timers")
+              event=db.execute("SELECT * FROM skill_events WHERE id=?",(ev,)).fetchone()
+          assert abs((after['end_ts']-now)/(before-now)-0.85)<0.001
+          assert after['skill_count']==1 and untouched['skill_count']==0
+          assert bob.member_event_access(owner,event)
+          assert not bob.member_event_access(outsider,event)
+          print("PASS: member +/− controls, own-timer access, skill event ownership, 15% reduction, isolated build/research")
           PY
       - name: Package complete updated bot
         run: |
