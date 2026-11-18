@@ -35,6 +35,16 @@ jobs:
           print("Top-level functions:", [n.name for n in p.body if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef))])
           print("View classes and methods:",[(n.name,[m.name for m in n.body if isinstance(m,(ast.FunctionDef,ast.AsyncFunctionDef))]) for n in p.body if isinstance(n,ast.ClassDef)])
           PY
+          python - <<'PY'
+          import ast
+          source=open("/tmp/bob-v8.py").read()
+          tree=ast.parse(source)
+          for n in tree.body:
+              if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in ("apply_skill","skill","undoskill","row_accessible"):
+                  print("SOURCE",n.name,ast.get_source_segment(source,n))
+              if isinstance(n,ast.ClassDef) and n.name in ("SkillTargetSelect","UndoSkillSelect","SkillTypeView","TimerActionsView"):
+                  print("SOURCE CLASS",n.name,ast.get_source_segment(source,n))
+          PY
           python patch_member_skill_controls_v8.py /tmp/bob-v8.py
           python -m py_compile /tmp/bob-v8.py
       - name: Verify Discord controls and timer behavior
