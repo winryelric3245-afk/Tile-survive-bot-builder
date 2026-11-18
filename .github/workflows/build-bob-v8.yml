@@ -42,7 +42,7 @@ jobs:
           for n in tree.body:
               if isinstance(n,(ast.FunctionDef,ast.AsyncFunctionDef)) and n.name in ("apply_skill","skill","undoskill","row_accessible"):
                   print("SOURCE",n.name,ast.get_source_segment(source,n))
-              if isinstance(n,ast.ClassDef) and n.name in ("SkillTargetSelect","UndoSkillSelect","SkillTypeView","TimerActionsView"):
+              if isinstance(n,ast.ClassDef) and n.name in ("SkillTargetSelect","UndoSkillSelect","SkillTypeView","SkillPercentView","HelperButtons"):
                   print("SOURCE CLASS",n.name,ast.get_source_segment(source,n))
           PY
           python patch_member_skill_controls_v8.py /tmp/bob-v8.py
