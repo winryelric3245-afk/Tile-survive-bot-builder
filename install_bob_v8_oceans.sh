@@ -4,7 +4,7 @@ set -euo pipefail
 BASE="https://raw.githubusercontent.com/winryelric3245-afk/Tile-survive-bot-builder/main"
 PATCH="/tmp/patch_member_skill_controls_v8.py"
 echo "Locating Bob's live bot.py..."
-mapfile -d '' CANDIDATES < <(find /opt /root /home /srv /app /workspace -type f -name bot.py ! -path '*/venv/*' ! -path '*/.venv/*' ! -path '*/site-packages/*' -print0 2>/dev/null || true)
+mapfile -d '' CANDIDATES < <(find /opt /root /home /srv /app /workspace \( -type d \( -name backups -o -name backup -o -name .venv -o -name venv -o -name site-packages \) -prune \) -o \( -type f -name bot.py -print0 \) 2>/dev/null || true)
 MATCHES=()
 for f in "${CANDIDATES[@]}"; do
   if grep -q 'class HelperButtons(discord.ui.View):' "$f" && grep -q 'def apply_skill(' "$f" && grep -q 'class UndoSkillSelect(' "$f"; then
